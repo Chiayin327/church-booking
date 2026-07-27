@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>教會空間預約系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --ink-navy:#1F2B45;
+    --slate-blue:#4A5A78;
+    --sanctuary-gold:#C9A227;
+    --soft-ivory:#FAF7F0;
+    --ember:#B85C38;
+    --forest:#2F4A3C;
+    --line:#E3DDCC;
+    --card-bg:#FFFFFF;
+    --room-fill:#FFFDF9;
+    --room-fill-hover:#F3EEE0;
+    --room-fill-active:#1F2B45;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--soft-ivory);
+    font-family:'Noto Sans TC', sans-serif;
+    color:var(--ink-navy);
+    min-height:100vh;
+  }
+  .app{max-width:1080px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* Header */
+  .header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding-bottom:22px;margin-bottom:26px;
+    border-bottom:1px solid var(--line);
+    gap:12px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand-mark{width:44px;height:52px;position:relative;flex:none;}
+  .brand-mark svg{width:100%;height:100%;}
+  .brand h1{font-family:'Noto Serif TC', serif;font-size:22px;font-weight:700;margin:0;letter-spacing:.02em;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--slate-blue);}
+  .user-chip{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--slate-blue);}
+  .user-chip .dot{
+    width:32px;height:32px;border-radius:50%;background:var(--ink-navy);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;font-family:'Noto Serif TC',serif;
+  }
+  .signout{border:1px solid var(--line);background:#fff;color:var(--slate-blue);font-size:12.5px;padding:6px 12px;border-radius:20px;cursor:pointer;}
+  .signout:hover{border-color:var(--slate-blue);}
+
+  /* Login screen */
+  .login-wrap{min-height:70vh;display:flex;align-items:center;justify-content:center;}
+  .login-card{
+    background:var(--card-bg);border:1px solid var(--line);border-radius:8px 8px 60px 60px;
+    padding:44px 40px 40px;max-width:380px;width:100%;text-align:center;
+    box-shadow:0 24px 48px -32px rgba(31,43,69,.35);position:relative;
+  }
+  .login-card::before{
+    content:"";position:absolute;top:-1px;left:50%;transform:translateX(-50%);width:60%;height:4px;
+    background:linear-gradient(90deg,var(--sanctuary-gold),var(--ember));border-radius:0 0 6px 6px;
+  }
+  .login-card .arch{width:56px;height:66px;margin:0 auto 18px;}
+  .login-card h2{font-family:'Noto Serif TC',serif;font-size:20px;margin:0 0 6px;}
+  .login-card .sub{font-size:13px;color:var(--slate-blue);margin:0 0 26px;line-height:1.6;}
+  .field{text-align:left;margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--slate-blue);margin-bottom:5px;font-weight:600;}
+  .field input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink-navy);}
+  .field input:focus{outline:2px solid var(--sanctuary-gold);outline-offset:1px;border-color:transparent;}
+  .field .hint{font-size:11px;color:#9a9280;margin-top:4px;}
+  .g-btn{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--ink-navy);color:#fff;
+    border:none;border-radius:6px;padding:12px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:'Noto Sans TC',sans-serif;margin-top:8px;
+  }
+  .g-btn:hover{background:#2c3a5c;}
+  .g-btn svg{width:18px;height:18px;flex:none;}
+  .err{color:var(--ember);font-size:12.5px;margin-top:10px;min-height:16px;}
+  .footnote{font-size:11px;color:#a39a86;margin-top:22px;line-height:1.6;}
+
+  /* Layout grid */
+  .grid{display:grid;grid-template-columns:1.25fr 1fr;gap:24px;}
+  @media (max-width:860px){.grid{grid-template-columns:1fr;}}
+
+  .panel{background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:22px 22px 24px;}
+  .panel h2{font-family:'Noto Serif TC',serif;font-size:17px;margin:0 0 4px;}
+  .panel .desc{font-size:12.5px;color:var(--slate-blue);margin:0 0 16px;}
+
+  /* Floor tabs */
+  .floor-tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .floor-tab{
+    border:1px solid var(--line);background:#fff;color:var(--slate-blue);font-size:12.5px;font-weight:600;
+    padding:7px 14px;border-radius:20px;cursor:pointer;
+  }
+  .floor-tab.active{background:var(--ink-navy);color:#fff;border-color:var(--ink-navy);}
+
+  /* Map */
+  .map-wrap{
+    border:1px solid var(--line);border-radius:8px;background:#FBF8F1;padding:10px;margin-bottom:8px;
+  }
+  .map-wrap svg{width:100%;height:auto;display:block;}
+  .room-shape{fill:var(--room-fill);stroke:var(--line);stroke-width:1.5;cursor:pointer;transition:fill .15s, stroke .15s;}
+  .room-shape:hover{fill:var(--room-fill-hover);stroke:var(--sanctuary-gold);}
+  .room-shape.active{fill:var(--room-fill-active);stroke:var(--sanctuary-gold);}
+  .room-label{font-family:'Noto Sans TC',sans-serif;font-size:11.5px;fill:var(--ink-navy);pointer-events:none;text-anchor:middle;}
+  .room-label.sub{font-size:9px;fill:var(--slate-blue);}
+  .room-shape.active + .room-label,
+  .room-label.active{fill:#fff;}
+  .map-hint{font-size:11.5px;color:#a39a86;margin:0 0 18px;}
+  .selected-room-line{
+    display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px;
+    background:#F3EEE0;border-radius:6px;padding:9px 12px;
+  }
+  .selected-room-line b{font-family:'Noto Serif TC',serif;color:var(--ink-navy);}
+
+  /* Form */
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:14px;resize:vertical;min-height:70px;color:var(--ink-navy);}
+  .field textarea:focus{outline:2px solid var(--sanctuary-gold);outline-offset:1px;}
+  .field select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink-navy);}
+  .field select:focus{outline:2px solid var(--sanctuary-gold);outline-offset:1px;}
+  .submit-btn{background:var(--forest);color:#fff;border:none;border-radius:6px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;}
+  .submit-btn:hover{background:#26392e;}
+  .submit-btn:disabled{background:#B8C0B9;cursor:not-allowed;}
+  .form-msg{font-size:12.5px;margin-top:10px;min-height:16px;}
+  .form-msg.ok{color:var(--forest);}
+  .form-msg.bad{color:var(--ember);}
+
+  /* Bookings list */
+  .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .filter-chip{border:1px solid var(--line);background:#fff;color:var(--slate-blue);font-size:12px;padding:5px 12px;border-radius:20px;cursor:pointer;}
+  .filter-chip.active{background:var(--ink-navy);color:#fff;border-color:var(--ink-navy);}
+  .booking-item{display:flex;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line);}
+  .booking-item:last-child{border-bottom:none;}
+  .b-date{flex:none;width:56px;text-align:center;}
+  .b-date .d{font-size:19px;font-weight:700;font-family:'Noto Serif TC',serif;color:var(--ink-navy);line-height:1.1;}
+  .b-date .m{font-size:11px;color:var(--slate-blue);}
+  .b-body{flex:1;}
+  .b-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .b-room{font-size:13.5px;font-weight:600;}
+  .b-time{font-size:12px;color:var(--slate-blue);}
+  .b-who{font-size:12.5px;color:var(--slate-blue);margin-top:2px;}
+  .b-purpose{font-size:13px;margin-top:4px;color:var(--ink-navy);}
+  .b-cancel{font-size:11.5px;color:var(--ember);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;flex:none;}
+  .empty{text-align:center;color:#a39a86;font-size:13px;padding:30px 0;}
+  .loading{text-align:center;color:#a39a86;font-size:13px;padding:30px 0;}
+  .fallback-banner{
+    background:#FBF0E4;border:1px solid var(--ember);color:#8a4126;
+    font-size:12px;padding:9px 12px;border-radius:6px;margin-bottom:18px;line-height:1.6;
+  }
+
+  /* View switch */
+  .view-tabs{display:flex;gap:8px;margin-bottom:18px;}
+  .view-tab{
+    border:1px solid var(--line);background:#fff;color:var(--slate-blue);font-size:13px;font-weight:600;
+    padding:8px 18px;border-radius:8px;cursor:pointer;
+  }
+  .view-tab.active{background:var(--ink-navy);color:#fff;border-color:var(--ink-navy);}
+
+  /* Calendar */
+  .cal-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .cal-nav{display:flex;align-items:center;gap:8px;}
+  .cal-nav button{
+    border:1px solid var(--line);background:#fff;color:var(--ink-navy);border-radius:6px;
+    width:30px;height:30px;cursor:pointer;font-size:14px;
+  }
+  .cal-nav button:hover{border-color:var(--sanctuary-gold);}
+  .cal-range{font-family:'Noto Serif TC',serif;font-size:14.5px;font-weight:700;min-width:150px;text-align:center;}
+  .cal-today-btn{border:1px solid var(--line);background:#fff;color:var(--slate-blue);font-size:12px;padding:6px 12px;border-radius:20px;cursor:pointer;}
+  .cal-room-select{border:1px solid var(--line);background:#fff;color:var(--ink-navy);font-size:12.5px;padding:6px 10px;border-radius:6px;font-family:inherit;}
+
+  .cal-scroll{max-height:520px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;}
+  .cal-grid{display:grid;grid-template-columns:48px repeat(7,1fr);min-width:640px;}
+  .cal-head-row{display:contents;}
+  .cal-corner{position:sticky;top:0;left:0;background:#fff;z-index:3;border-bottom:1px solid var(--line);}
+  .cal-head-cell{
+    position:sticky;top:0;background:#fff;z-index:2;border-bottom:1px solid var(--line);border-left:1px solid var(--line);
+    text-align:center;padding:6px 2px;font-size:11px;color:var(--slate-blue);
+  }
+  .cal-head-cell .dow{font-weight:700;color:var(--ink-navy);font-size:12.5px;}
+  .cal-head-cell.today{background:#F3EEE0;}
+  .cal-time-col{position:relative;border-right:1px solid var(--line);}
+  .cal-time-label{
+    position:absolute;right:4px;transform:translateY(-6px);font-size:10px;color:#a39a86;
+  }
+  .cal-day-col{
+    position:relative;border-left:1px solid var(--line);
+    background-image:repeating-linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px, transparent 44px);
+  }
+  .cal-day-col.today{background-color:#FBF8F1;}
+  .cal-event{
+    position:absolute;border-radius:4px;overflow:hidden;padding:2px 5px;font-size:10.5px;line-height:1.3;
+    color:#fff;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.25);
+  }
+  .cal-event b{display:block;font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cal-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .cal-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--slate-blue);}
+  .cal-legend-dot{width:9px;height:9px;border-radius:2px;flex:none;}
+  .cal-detail{
+    margin-top:16px;border:1px solid var(--line);border-radius:8px;padding:14px 16px;background:#FBF8F1;
+  }
+  .cal-detail .close-x{float:right;background:none;border:none;color:var(--slate-blue);cursor:pointer;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ---------- Room / floor data (derived from the church's hand-drawn floor plan) ---------- */
+const FLOORS = {
+  '1F': {
+    label: '一樓 1F',
+    viewBox: '0 0 620 300',
+    shapes: [
+      { name:'Lounge', label:'Lounge', x:20, y:30, w:110, h:90, type:'rect' },
+      { name:'Nursery', label:'Nursery', x:140, y:30, w:110, h:90, type:'rect' },
+      { name:'W103-W105', label:'W103-W105', x:20, y:130, w:110, h:90, type:'rect' },
+      { name:'Evergreen room', label:'Evergreen room', sub:'松柏教室', x:140, y:130, w:110, h:90, type:'rect' },
+      { name:'Sanctuary', label:'Sanctuary', type:'octagon', x:260, y:10, w:200, h:270, cut:45 },
+      { name:'Kitchen', label:'Kitchen', x:470, y:30, w:60, h:50, type:'rect' },
+      { name:'Fellowship Hall', label:'Fellowship Hall', x:470, y:90, w:130, h:190, type:'rect' }
+    ]
+  },
+  '2F': {
+    label: '二樓 2F',
+    viewBox: '0 0 620 260',
+    shapes: [
+      { name:'New Choir Room', label:'New Choir Room', x:20, y:20, w:90, h:70, type:'rect' },
+      { name:'W205', label:'W205', x:120, y:20, w:90, h:70, type:'rect' },
+      { name:'EM Chapel', label:'EM Chapel', x:20, y:100, w:190, h:130, type:'rect' },
+      { name:'Old Choir Room', label:'Old Choir Room', x:220, y:20, w:110, h:210, type:'rect' },
+      { name:'Library', label:'Library', sub:'圖書館', x:340, y:20, w:110, h:210, type:'rect' }
+    ]
+  },
+  'B1': {
+    label: '地下室 Basement',
+    viewBox: '0 0 620 220',
+    shapes: [
+      { name:'Basement 001/003', label:'B001/003', x:20, y:20, w:160, h:110, type:'rect' },
+      { name:'Basement 005', label:'B005', x:190, y:20, w:100, h:110, type:'rect' },
+      { name:'Basement 007', label:'B007', x:300, y:20, w:100, h:110, type:'rect' },
+      { name:'Basement 002/004/006', label:'B002/004/006', x:100, y:140, w:300, h:60, type:'rect' }
+    ]
+  }
+};
+
+const ROOMS = Object.values(FLOORS).flatMap(f => f.shapes.map(s => s.name));
+
+/* ==========================================================================
+   SUPABASE 設定（正式上線用）
+   還沒設定時（保持預設值），系統會自動使用「示範模式」：
+   模擬 Gmail 登入 + 本次瀏覽暫存資料，方便你在這裡繼續測試操作流程。
+   設定好 Supabase 專案後，把下面兩個值換成你自己的，系統會自動切換成
+   真正的 Google 登入 + 真正資料庫。步驟請參考另外附上的教學文件。
+   ========================================================================== */
+const SUPABASE_URL = 'https://xrdclxtmuirgvymoswxe.supabase.co';       // 例如 https://abcdefgh.supabase.co
+const SUPABASE_ANON_KEY = 'sb_publishable_E-_dKGSwuWi246UdkVXA5Q_8Kr17waJ';       // Supabase 專案設定裡的 anon public key
+
+const SUPABASE_CONFIGURED =
+  SUPABASE_URL.startsWith('https://') &&
+  SUPABASE_URL !== 'https://xrdclxtmuirgvymoswxe.supabase.co' &&
+  SUPABASE_ANON_KEY !== 'sb_publishable_E-_dKGSwuWi246UdkVXA5Q_8Kr17waJ' &&
+  SUPABASE_ANON_KEY.length > 20;
+
+let sb = null;
+if(SUPABASE_CONFIGURED && window.supabase){
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+let state = {
+  user: null,
+  currentFloor: '1F',
+  selectedRoom: ROOMS[0],
+  filterRoom: 'all',
+  bookings: [],
+  loading: true,
+  loginError: '',
+  formMsg: {text:'', type:''},
+  usingFallbackStorage: false,
+  view: 'booking',
+  calRoomFilter: 'all',
+  calWeekStart: null,
+  selectedEventId: null
+};
+
+function halfHourOptions(){
+  const opts = [];
+  for(let h=0; h<24; h++){
+    for(const m of [0,30]){
+      opts.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+    }
+  }
+  return opts;
+}
+const TIME_OPTIONS = halfHourOptions();
+
+const ROOM_COLORS = ['#1F2B45','#4A5A78','#C9A227','#B85C38','#2F4A3C','#7A6248','#6B4E71','#3E6E75','#8C5B3F','#5C6B3F','#4B3F72','#8A3B4B','#2E5C6E','#7A3E2E','#456B4A','#5A4A6B'];
+function colorForRoom(room){
+  const idx = ROOMS.indexOf(room);
+  return ROOM_COLORS[idx >= 0 ? idx % ROOM_COLORS.length : 0];
+}
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function formatISODate(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
+function parseISODate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function mondayOf(d){
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1 - day);
+  const m = new Date(d);
+  m.setDate(m.getDate() + diff);
+  return m;
+}
+function weekDates(startISO){
+  const start = parseISODate(startISO);
+  const out = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(start);
+    d.setDate(d.getDate()+i);
+    out.push(formatISODate(d));
+  }
+  return out;
+}
+function toMinutes(hhmm){
+  const [h,m] = hhmm.split(':').map(Number);
+  return h*60+m;
+}
+/* Assigns a horizontal "lane" to each event so overlapping events in the
+   same day sit side-by-side instead of on top of each other. */
+function assignLanes(events){
+  const sorted = [...events].sort((a,b) => toMinutes(a.start) - toMinutes(b.start));
+  const laneEnds = [];
+  const withLanes = sorted.map(ev => {
+    const startMin = toMinutes(ev.start);
+    let lane = laneEnds.findIndex(end => end <= startMin);
+    if(lane === -1){ lane = laneEnds.length; laneEnds.push(0); }
+    laneEnds[lane] = toMinutes(ev.end);
+    return {...ev, lane};
+  });
+  const maxLanes = laneEnds.length || 1;
+  return {events: withLanes, maxLanes};
+}
+
+function initials(name){
+  if(!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if(parts.length === 1) return parts[0].slice(0,1);
+  return parts[0].slice(0,1) + parts[parts.length-1].slice(0,1);
+}
+
+/* Build an octagon point-string that fits inside x,y,w,h with corner cut size `cut` */
+function octagonPoints(x,y,w,h,cut){
+  const pts = [
+    [x+cut, y], [x+w-cut, y],
+    [x+w, y+cut], [x+w, y+h-cut],
+    [x+w-cut, y+h], [x+cut, y+h],
+    [x, y+h-cut], [x, y+cut]
+  ];
+  return pts.map(p => p.join(',')).join(' ');
+}
+
+/* ---------- Resilient storage layer ---------- */
+/* Falls back to an in-memory store (this browser tab only) if the real
+   persistent storage isn't available, so the app never hard-fails. */
+const _memoryStore = new Map();
+
+const storageAdapter = {
+  async get(key, shared){
+    try{
+      if(window.storage) return await window.storage.get(key, shared);
+      throw new Error('no window.storage');
+    }catch(e){
+      state.usingFallbackStorage = true;
+      const k = (shared?'s:':'l:')+key;
+      if(_memoryStore.has(k)) return {key, value:_memoryStore.get(k), shared};
+      return null;
+    }
+  },
+  async set(key, value, shared){
+    try{
+      if(window.storage){
+        const res = await window.storage.set(key, value, shared);
+        if(res) return res;
+        throw new Error('set returned falsy');
+      }
+      throw new Error('no window.storage');
+    }catch(e){
+      state.usingFallbackStorage = true;
+      const k = (shared?'s:':'l:')+key;
+      _memoryStore.set(k, value);
+      return {key, value, shared};
+    }
+  },
+  async delete(key, shared){
+    try{
+      if(window.storage) return await window.storage.delete(key, shared);
+      throw new Error('no window.storage');
+    }catch(e){
+      state.usingFallbackStorage = true;
+      const k = (shared?'s:':'l:')+key;
+      _memoryStore.delete(k);
+      return {key, deleted:true, shared};
+    }
+  },
+  async list(prefix, shared){
+    try{
+      if(window.storage) return await window.storage.list(prefix, shared);
+      throw new Error('no window.storage');
+    }catch(e){
+      state.usingFallbackStorage = true;
+      const p = (shared?'s:':'l:')+(prefix||'');
+      const stripLen = (shared?'s:':'l:').length;
+      const keys = [];
+      for(const k of _memoryStore.keys()){
+        if(k.startsWith(p)) keys.push(k.slice(stripLen));
+      }
+      return {keys, prefix, shared};
+    }
+  }
+};
+
+async function loadBookings(){
+  state.loading = true;
+  render();
+  try{
+    state.bookings = await bookingsAPI.loadAll();
+  }catch(e){
+    state.bookings = [];
+  }
+  state.loading = false;
+  render();
+}
+
+const bookingsAPI = {
+  async loadAll(){
+    if(sb){
+      const { data, error } = await sb.from('bookings').select('*').order('date', {ascending:true}).order('start_time', {ascending:true});
+      if(error) throw error;
+      return data.map(r => ({
+        id: r.id, room: r.room, date: r.date, start: r.start_time, end: r.end_time,
+        purpose: r.purpose, name: r.user_name, email: r.user_email
+      }));
+    }
+    const list = await storageAdapter.list('booking:', true);
+    if(!list || !list.keys || list.keys.length === 0) return [];
+    const results = [];
+    for(const k of list.keys){
+      try{
+        const r = await storageAdapter.get(k, true);
+        if(r && r.value) results.push(JSON.parse(r.value));
+      }catch(e){}
+    }
+    results.sort((a,b) => (a.date+a.start).localeCompare(b.date+b.start));
+    return results;
+  },
+  async create(record){
+    if(sb){
+      const { error } = await sb.from('bookings').insert([{
+        room: record.room, date: record.date, start_time: record.start, end_time: record.end,
+        purpose: record.purpose, user_name: record.name, user_email: record.email
+      }]);
+      if(error) throw error;
+      return true;
+    }
+    const id = 'booking:' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+    const res = await storageAdapter.set(id, JSON.stringify({...record, id}), true);
+    if(!res) throw new Error('save failed');
+    return true;
+  },
+  async remove(id){
+    if(sb){
+      const { error } = await sb.from('bookings').delete().eq('id', id);
+      if(error) throw error;
+      return true;
+    }
+    await storageAdapter.delete(id, true);
+    return true;
+  }
+};
+
+function overlaps(aStart, aEnd, bStart, bEnd){
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function handleLogin(name, email){
+  state.loginError = '';
+  name = name.trim();
+  email = email.trim().toLowerCase();
+  if(!name){ state.loginError = '請輸入姓名。'; render(); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    state.loginError = '請輸入正確格式的 email。';
+    render();
+    return;
+  }
+  state.user = {name, email};
+  loadBookings();
+}
+
+async function handleGoogleLogin(){
+  if(!sb) return;
+  state.loginError = '';
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href }
+  });
+  if(error){
+    state.loginError = '登入時發生錯誤，請再試一次。';
+    render();
+  }
+  // On success the browser redirects to Google, then back here;
+  // initAuth()'s onAuthStateChange listener picks up the new session.
+}
+
+async function setUserFromSession(session){
+  const email = (session.user.email || '').toLowerCase();
+  const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email;
+
+  try{
+    const { data, error } = await sb.from('members').select('email').eq('email', email).maybeSingle();
+    if(error) throw error;
+    if(!data){
+      state.loginError = '此 Google 帳號不在教會會員名單中，如需使用請聯絡管理員將您的信箱加入會員名單。';
+      await sb.auth.signOut();
+      state.user = null;
+      render();
+      return;
+    }
+  }catch(e){
+    // If the members table doesn't exist yet (e.g. still setting up), don't hard-block login.
+  }
+
+  state.user = {name, email};
+  loadBookings();
+}
+
+function handleLogout(){
+  if(sb){
+    sb.auth.signOut();
+  }
+  state.user = null;
+  render();
+}
+
+async function handleSubmit(e){
+  e.preventDefault();
+  const form = e.target;
+  const room = state.selectedRoom;
+  const date = form.elements.namedItem('date').value;
+  const start = form.elements.namedItem('start').value;
+  const end = form.elements.namedItem('end').value;
+  const purpose = form.elements.namedItem('purpose').value.trim();
+
+  state.formMsg = {text:'', type:''};
+
+  if(!date || !start || !end || !purpose){
+    state.formMsg = {text:'請完整填寫日期、時間與預約內容。', type:'bad'};
+    render(); return;
+  }
+  if(start >= end){
+    state.formMsg = {text:'結束時間必須晚於開始時間。', type:'bad'};
+    render(); return;
+  }
+
+  const conflict = state.bookings.find(b =>
+    b.room === room && b.date === date && overlaps(start, end, b.start, b.end)
+  );
+  if(conflict){
+    state.formMsg = {text:`此時段 ${room} 已被 ${conflict.name} 預約（${conflict.start}-${conflict.end}），請選擇其他時間。`, type:'bad'};
+    render(); return;
+  }
+
+  const record = {
+    room, date, start, end, purpose,
+    name: state.user.name, email: state.user.email
+  };
+
+  try{
+    await bookingsAPI.create(record);
+    state.formMsg = {text:'預約成功！', type:'ok'};
+    await loadBookings();
+    form.elements.namedItem('purpose').value = '';
+  }catch(err){
+    state.formMsg = {text:'儲存發生錯誤，請再試一次。', type:'bad'};
+    render();
+  }
+}
+
+async function handleCancel(id, ownerEmail){
+  if(ownerEmail !== state.user.email){ return; }
+  if(!confirm('確定要取消這筆預約嗎？')) return;
+  try{
+    await bookingsAPI.remove(id);
+    await loadBookings();
+  }catch(e){}
+}
+
+function fmtMonthDay(dateStr){
+  const [y,m,d] = dateStr.split('-');
+  const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  return {d: d, m: months[parseInt(m,10)-1]};
+}
+
+function renderLogin(){
+  const wrap = document.getElementById('app');
+
+  const realLoginHtml = `
+      <button id="google-login-btn" class="g-btn">
+        <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20.4H24v7.2h11.3C33.9 31.6 29.4 34.6 24 34.6c-7 0-12.6-5.6-12.6-12.6S17 9.4 24 9.4c3.2 0 6.1 1.2 8.3 3.2l5.4-5.4C34.5 4 29.5 2 24 2 11.9 2 2 11.9 2 24s9.9 22 22 22 22-9.9 22-22c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M4.5 12.9l6.6 4.8C13 13 18.1 9.4 24 9.4c3.2 0 6.1 1.2 8.3 3.2l5.4-5.4C34.5 4 29.5 2 24 2 15.7 2 8.5 6.6 4.5 12.9z"/><path fill="#4CAF50" d="M24 46c5.4 0 10.3-1.8 14.1-5.1l-6.5-5.4C29.5 37.1 26.9 38 24 38c-5.4 0-10-3.7-11.6-8.7l-6.7 5.1C9.4 41.4 16.1 46 24 46z"/><path fill="#1976D2" d="M43.6 20.5H42V20.4H24v7.2h11.3c-1.1 3.1-3.5 5.6-6.7 7.1l6.5 5.4C38.7 38 42 32.5 42 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+        以 Google 帳號登入
+      </button>
+      <div class="err">${state.loginError}</div>
+      <p class="footnote">僅限教會會員名單內的 Google 帳號可登入。若顯示無法登入，請聯絡教會管理員確認您的信箱已加入會員名單。</p>`;
+
+  const demoLoginHtml = `
+      <form id="login-form" novalidate>
+        <div class="field">
+          <label for="name">姓名</label>
+          <input id="name" name="name" type="text" placeholder="請輸入您的姓名" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="email">Gmail 信箱</label>
+          <input id="email" name="email" type="email" placeholder="you@gmail.com" autocomplete="email">
+          <div class="hint">原型測試階段：任何格式正確的 email 皆可登入（正式上線會改成真正的 Google 登入 + 會員名單驗證）</div>
+        </div>
+        <button type="submit" class="g-btn">
+          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20.4H24v7.2h11.3C33.9 31.6 29.4 34.6 24 34.6c-7 0-12.6-5.6-12.6-12.6S17 9.4 24 9.4c3.2 0 6.1 1.2 8.3 3.2l5.4-5.4C34.5 4 29.5 2 24 2 11.9 2 2 11.9 2 24s9.9 22 22 22 22-9.9 22-22c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M4.5 12.9l6.6 4.8C13 13 18.1 9.4 24 9.4c3.2 0 6.1 1.2 8.3 3.2l5.4-5.4C34.5 4 29.5 2 24 2 15.7 2 8.5 6.6 4.5 12.9z"/><path fill="#4CAF50" d="M24 46c5.4 0 10.3-1.8 14.1-5.1l-6.5-5.4C29.5 37.1 26.9 38 24 38c-5.4 0-10-3.7-11.6-8.7l-6.7 5.1C9.4 41.4 16.1 46 24 46z"/><path fill="#1976D2" d="M43.6 20.5H42V20.4H24v7.2h11.3c-1.1 3.1-3.5 5.6-6.7 7.1l6.5 5.4C38.7 38 42 32.5 42 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+          以 Gmail 登入
+        </button>
+        <div class="err">${state.loginError}</div>
+      </form>
+      <button id="skip-login-btn" style="width:100%;background:none;border:1px dashed var(--line);color:var(--slate-blue);border-radius:6px;padding:10px;font-size:12.5px;cursor:pointer;margin-top:14px;">略過登入（測試用）→ 直接進入預約畫面</button>
+      <p class="footnote">＊此為示範模式：尚未連接 Supabase 資料庫。設定好之後（見教學文件）會自動切換成真正的 Google 登入 + 會員名單驗證，上方「略過登入」按鈕也會自動消失。</p>`;
+
+  wrap.innerHTML = `
+  <div class="login-wrap">
+    <div class="login-card">
+      <svg class="arch" viewBox="0 0 56 66" fill="none">
+        <path d="M2 64V28C2 13.088 13.64 1 28 1s26 12.088 26 27v36" stroke="#C9A227" stroke-width="2.5"/>
+        <path d="M28 1v63" stroke="#E3DDCC" stroke-width="1.5"/>
+        <path d="M14 64V30c0-8 6-14 14-14s14 6 14 14v34" stroke="#1F2B45" stroke-width="2"/>
+      </svg>
+      <h2>教會空間預約系統</h2>
+      <p class="sub">僅限教會會員使用。<br>請使用您的 Gmail 帳號登入以繼續。</p>
+      ${SUPABASE_CONFIGURED ? realLoginHtml : demoLoginHtml}
+    </div>
+  </div>`;
+
+  if(SUPABASE_CONFIGURED){
+    document.getElementById('google-login-btn').addEventListener('click', handleGoogleLogin);
+  } else {
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const nameVal = document.getElementById('name').value;
+      const emailVal = document.getElementById('email').value;
+      handleLogin(nameVal, emailVal);
+    });
+    document.getElementById('skip-login-btn').addEventListener('click', () => {
+      handleLogin('測試會員', 'test.member@gmail.com');
+    });
+  }
+}
+
+function renderMapSVG(){
+  const floor = FLOORS[state.currentFloor];
+  const shapes = floor.shapes.map(s => {
+    const isActive = s.name === state.selectedRoom;
+    let shapeEl;
+    if(s.type === 'octagon'){
+      shapeEl = `<polygon class="room-shape ${isActive?'active':''}" data-room="${s.name}" points="${octagonPoints(s.x,s.y,s.w,s.h,s.cut)}"/>`;
+    } else {
+      shapeEl = `<rect class="room-shape ${isActive?'active':''}" data-room="${s.name}" x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="4"/>`;
+    }
+    const cx = s.x + s.w/2;
+    const cy = s.y + s.h/2 + (s.sub ? -4 : 4);
+    const labelEl = `<text class="room-label ${isActive?'active':''}" x="${cx}" y="${cy}">${s.label}</text>`;
+    const subEl = s.sub ? `<text class="room-label sub ${isActive?'active':''}" x="${cx}" y="${cy+14}">${s.sub}</text>` : '';
+    return shapeEl + labelEl + subEl;
+  }).join('');
+
+  return `<svg viewBox="${floor.viewBox}" xmlns="http://www.w3.org/2000/svg">${shapes}</svg>`;
+}
+
+function renderCalendarPanel(){
+  if(!state.calWeekStart){
+    state.calWeekStart = formatISODate(mondayOf(new Date()));
+  }
+  const days = weekDates(state.calWeekStart);
+  const todayISO = formatISODate(new Date());
+  const dowNames = ['一','二','三','四','五','六','日'];
+  const monthsShort = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+  const firstDate = parseISODate(days[0]);
+  const lastDate = parseISODate(days[6]);
+  const rangeLabel = firstDate.getMonth() === lastDate.getMonth()
+    ? `${monthsShort[firstDate.getMonth()]} ${firstDate.getDate()}–${lastDate.getDate()}`
+    : `${monthsShort[firstDate.getMonth()]}${firstDate.getDate()} – ${monthsShort[lastDate.getMonth()]}${lastDate.getDate()}`;
+
+  const roomFilterOptions = ['all', ...ROOMS].map(r =>
+    `<option value="${r}" ${state.calRoomFilter===r?'selected':''}>${r==='all'?'全部空間':r}</option>`
+  ).join('');
+
+  const SLOT_H = 22; // px per 30 min
+  const gridHeight = 48 * SLOT_H;
+
+  const timeLabels = TIME_OPTIONS.map((t,i) => {
+    if(i % 2 !== 0) return '';
+    return `<div class="cal-time-label" style="top:${i*SLOT_H}px">${t}</div>`;
+  }).join('');
+
+  const dayColumns = days.map(dateISO => {
+    const dayEvents = state.bookings.filter(b =>
+      b.date === dateISO && (state.calRoomFilter==='all' || b.room === state.calRoomFilter)
+    );
+    const {events, maxLanes} = assignLanes(dayEvents);
+    const eventEls = events.map(ev => {
+      const startMin = toMinutes(ev.start);
+      const endMin = toMinutes(ev.end);
+      const top = (startMin/30)*SLOT_H;
+      const height = Math.max(((endMin-startMin)/30)*SLOT_H - 2, 14);
+      const widthPct = 100/maxLanes;
+      const leftPct = ev.lane * widthPct;
+      const bg = state.calRoomFilter==='all' ? colorForRoom(ev.room) : 'var(--ink-navy)';
+      const label = state.calRoomFilter==='all' ? ev.room : ev.name;
+      const titleAttr = `${ev.room} · ${ev.start}-${ev.end} · ${ev.name} · ${ev.purpose}`.replace(/"/g,'&quot;');
+      return `<div class="cal-event" data-event-id="${ev.id}" title="${titleAttr}"
+        style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${bg};">
+        <b>${label}</b>${ev.start}-${ev.end}
+      </div>`;
+    }).join('');
+    const isToday = dateISO === todayISO;
+    return `<div class="cal-day-col ${isToday?'today':''}" style="height:${gridHeight}px" data-day="${dateISO}">${eventEls}</div>`;
+  }).join('');
+
+  const headCells = days.map((dateISO,i) => {
+    const d = parseISODate(dateISO);
+    const isToday = dateISO === todayISO;
+    return `<div class="cal-head-cell ${isToday?'today':''}">
+      <div class="dow">${dowNames[i]}</div>
+      <div>${d.getMonth()+1}/${d.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  const legend = state.calRoomFilter === 'all' ? `<div class="cal-legend">
+    ${ROOMS.map(r => `<div class="cal-legend-item"><span class="cal-legend-dot" style="background:${colorForRoom(r)}"></span>${r}</div>`).join('')}
+  </div>` : '';
+
+  const selected = state.selectedEventId ? state.bookings.find(b => b.id === state.selectedEventId) : null;
+  const detail = selected ? `<div class="cal-detail">
+    <button class="close-x" id="cal-detail-close">✕ 關閉</button>
+    <div style="font-weight:700;font-family:'Noto Serif TC',serif;font-size:15px;">${selected.room}</div>
+    <div style="font-size:12.5px;color:var(--slate-blue);margin-top:4px;">${selected.date}　${selected.start} - ${selected.end}</div>
+    <div style="font-size:13px;margin-top:8px;">預約人：${selected.name}</div>
+    <div style="font-size:13px;margin-top:4px;">${selected.purpose}</div>
+    ${selected.email === state.user.email ? `<button class="b-cancel" style="margin-top:10px;" data-cancel="${selected.id}">取消預約</button>` : ''}
+  </div>` : '';
+
+  return `
+    <div class="panel">
+      <h2>空間預約行事曆</h2>
+      <p class="desc">類似 Google 日曆的週檢視，可切換看全部空間或單一空間。</p>
+
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button id="cal-prev">‹</button>
+          <div class="cal-range">${rangeLabel}</div>
+          <button id="cal-next">›</button>
+          <button class="cal-today-btn" id="cal-today">本週</button>
+        </div>
+        <select class="cal-room-select" id="cal-room-filter">${roomFilterOptions}</select>
+      </div>
+
+      <div class="cal-scroll" id="cal-scroll">
+        <div class="cal-grid">
+          <div class="cal-corner"></div>
+          ${headCells}
+          <div class="cal-time-col" style="height:${gridHeight}px">${timeLabels}</div>
+          ${dayColumns}
+        </div>
+      </div>
+
+      ${legend}
+      ${detail}
+    </div>
+  `;
+}
+
+function renderApp(){
+  const wrap = document.getElementById('app');
+
+  const floorTabs = Object.keys(FLOORS).map(k => `
+    <button class="floor-tab ${state.currentFloor===k?'active':''}" data-floor="${k}">${FLOORS[k].label}</button>
+  `).join('');
+
+  const filterChips = ['all', ...ROOMS].map(r => `
+    <button class="filter-chip ${state.filterRoom===r?'active':''}" data-filter="${r}">${r==='all'?'全部空間':r}</button>
+  `).join('');
+
+  const today = new Date().toISOString().slice(0,10);
+  const visible = state.bookings.filter(b => (state.filterRoom==='all' || b.room===state.filterRoom) && b.date >= today);
+
+  let bookingListHtml;
+  if(state.loading){
+    bookingListHtml = `<div class="loading">載入預約紀錄中…</div>`;
+  } else if(visible.length === 0){
+    bookingListHtml = `<div class="empty">目前沒有即將到來的預約。</div>`;
+  } else {
+    bookingListHtml = visible.map(b => {
+      const md = fmtMonthDay(b.date);
+      const canCancel = b.email === state.user.email;
+      return `<div class="booking-item">
+        <div class="b-date"><div class="d">${md.d}</div><div class="m">${md.m}</div></div>
+        <div class="b-body">
+          <div class="b-top">
+            <span class="b-room">${b.room}</span>
+            <span class="b-time">${b.start} - ${b.end}</span>
+          </div>
+          <div class="b-who">預約人：${b.name}</div>
+          <div class="b-purpose">${b.purpose}</div>
+          ${canCancel ? `<button class="b-cancel" data-cancel="${b.id}">取消預約</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  wrap.innerHTML = `
+  <div class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 44 52" fill="none">
+          <path d="M2 50V22C2 10.4 10.95 1 22 1s20 9.4 20 21v28" stroke="#C9A227" stroke-width="2"/>
+          <path d="M22 1v49" stroke="#E3DDCC" stroke-width="1.2"/>
+        </svg>
+      </div>
+      <div>
+        <h1>教會空間預約系統</h1>
+        <p>會員專用 · 場地借用申請</p>
+      </div>
+    </div>
+    <div class="user-chip">
+      <div class="dot">${initials(state.user.name)}</div>
+      <div>
+        <div style="font-weight:600;color:var(--ink-navy);">${state.user.name}</div>
+        <div>${state.user.email}</div>
+      </div>
+      <button class="signout" id="signout-btn">登出</button>
+    </div>
+  </div>
+
+  ${state.usingFallbackStorage ? `<div class="fallback-banner">⚠️ 目前連不上共用資料庫，系統暫時改用「本次瀏覽暫存」模式：功能都能正常測試，但重新整理頁面或關閉分頁後，這些預約紀錄會消失，且不會被其他會員看到。</div>` : ''}
+
+  <div class="view-tabs">
+    <button class="view-tab ${state.view==='booking'?'active':''}" data-view="booking">📝 填寫預約</button>
+    <button class="view-tab ${state.view==='calendar'?'active':''}" data-view="calendar">📅 行事曆總覽</button>
+  </div>
+
+  ${state.view === 'calendar' ? renderCalendarPanel() : `
+  <div class="grid">
+    <div class="panel">
+      <h2>選擇空間並提出申請</h2>
+      <p class="desc">點選樓層地圖上的房間，或用下方清單快速切換。</p>
+
+      <div class="floor-tabs">${floorTabs}</div>
+      <div class="map-wrap">${renderMapSVG()}</div>
+      <p class="map-hint">提示：地下室與教室較小的空間點擊可能較不易對準，可用下方篩選清單輔助選取。</p>
+
+      <div class="selected-room-line">已選空間：<b>${state.selectedRoom}</b></div>
+
+      <form id="booking-form" novalidate>
+        <div class="field">
+          <label>日期</label>
+          <input type="date" name="date" min="${today}">
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>開始時間</label>
+            <select name="start">
+              <option value="">請選擇</option>
+              ${TIME_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>結束時間</label>
+            <select name="end">
+              <option value="">請選擇</option>
+              ${TIME_OPTIONS.map(t => `<option value="${t}">${t}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>預約內容 / 用途</label>
+          <textarea name="purpose" placeholder="例如：主日學備課、詩班練習、小組聚會…"></textarea>
+        </div>
+        <button type="submit" class="submit-btn">送出預約 — ${state.selectedRoom}</button>
+        <div class="form-msg ${state.formMsg.type}">${state.formMsg.text}</div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>即將到來的預約</h2>
+      <p class="desc">所有會員皆可查看，避免時段衝突。</p>
+      <div class="filter-bar">${filterChips}</div>
+      ${bookingListHtml}
+    </div>
+  </div>
+  `}
+  `;
+
+  document.getElementById('signout-btn').addEventListener('click', handleLogout);
+
+  wrap.querySelectorAll('.view-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.view = btn.dataset.view;
+      state.selectedEventId = null;
+      render();
+    });
+  });
+
+  if(state.view === 'calendar'){
+    const scrollEl = document.getElementById('cal-scroll');
+    if(scrollEl) scrollEl.scrollTop = 7 * 2 * 22; // auto-scroll to 07:00
+
+    document.getElementById('cal-prev').addEventListener('click', () => {
+      const d = parseISODate(state.calWeekStart); d.setDate(d.getDate()-7);
+      state.calWeekStart = formatISODate(d); render();
+    });
+    document.getElementById('cal-next').addEventListener('click', () => {
+      const d = parseISODate(state.calWeekStart); d.setDate(d.getDate()+7);
+      state.calWeekStart = formatISODate(d); render();
+    });
+    document.getElementById('cal-today').addEventListener('click', () => {
+      state.calWeekStart = formatISODate(mondayOf(new Date())); render();
+    });
+    document.getElementById('cal-room-filter').addEventListener('change', (e) => {
+      state.calRoomFilter = e.target.value; render();
+    });
+    wrap.querySelectorAll('.cal-event').forEach(ev => {
+      ev.addEventListener('click', () => {
+        state.selectedEventId = ev.dataset.eventId;
+        render();
+      });
+    });
+    const closeBtn = document.getElementById('cal-detail-close');
+    if(closeBtn) closeBtn.addEventListener('click', () => { state.selectedEventId = null; render(); });
+  }
+
+  if(state.view === 'booking'){
+    wrap.querySelectorAll('.floor-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.currentFloor = btn.dataset.floor;
+        render();
+      });
+    });
+
+    wrap.querySelectorAll('.room-shape').forEach(shape => {
+      shape.addEventListener('click', () => {
+        state.selectedRoom = shape.dataset.room;
+        render();
+      });
+    });
+
+    wrap.querySelectorAll('.filter-chip').forEach(c => {
+      c.addEventListener('click', () => {
+        state.filterRoom = c.dataset.filter;
+        render();
+      });
+    });
+
+    document.getElementById('booking-form').addEventListener('submit', handleSubmit);
+  }
+
+  wrap.querySelectorAll('[data-cancel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const b = state.bookings.find(x => x.id === btn.dataset.cancel);
+      if(b) handleCancel(b.id, b.email);
+    });
+  });
+}
+
+function render(){
+  if(!state.user){
+    renderLogin();
+  } else {
+    renderApp();
+  }
+}
+
+async function initAuth(){
+  if(sb){
+    sb.auth.onAuthStateChange((event, session) => {
+      if(event === 'SIGNED_IN' && session && session.user){
+        setUserFromSession(session);
+      } else if(event === 'SIGNED_OUT'){
+        state.user = null;
+        render();
+      }
+    });
+    const { data: { session } } = await sb.auth.getSession();
+    if(session && session.user){
+      await setUserFromSession(session);
+      return;
+    }
+  }
+  render();
+}
+
+initAuth();
+</script>
+</body>
+</html>
