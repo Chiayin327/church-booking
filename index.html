@@ -258,10 +258,9 @@ const SUPABASE_URL = 'https://xrdclxtmuirgvymoswxe.supabase.co';       // 例如
 const SUPABASE_ANON_KEY = 'sb_publishable_E-_dKGSwuWi246UdkVXA5Q_8Kr17waJ';       // Supabase 專案設定裡的 anon public key
 
 const SUPABASE_CONFIGURED =
-  SUPABASE_URL.startsWith('https://') &&
-  SUPABASE_URL !== 'https://xrdclxtmuirgvymoswxe.supabase.co' &&
-  SUPABASE_ANON_KEY !== 'sb_publishable_E-_dKGSwuWi246UdkVXA5Q_8Kr17waJ' &&
-  SUPABASE_ANON_KEY.length > 20;
+  /^https:\/\/[a-z0-9]+\.supabase\.co\/?$/i.test(SUPABASE_URL.trim()) &&
+  SUPABASE_ANON_KEY.trim().length > 20 &&
+  !SUPABASE_ANON_KEY.includes('YOUR_');
 
 let sb = null;
 if(SUPABASE_CONFIGURED && window.supabase){
