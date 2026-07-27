@@ -514,18 +514,12 @@ async function setUserFromSession(session){
   const email = (session.user.email || '').toLowerCase();
   const name = session.user.user_metadata?.full_name || session.user.user_metadata?.name || email;
 
-  try{
-    const { data, error } = await sb.from('members').select('email').eq('email', email).maybeSingle();
-    if(error) throw error;
-    if(!data){
-      state.loginError = '此 Google 帳號不在教會會員名單中，如需使用請聯絡管理員將您的信箱加入會員名單。';
-      await sb.auth.signOut();
-      state.user = null;
-      render();
-      return;
-    }
-  }catch(e){
-    // If the members table doesn't exist yet (e.g. still setting up), don't hard-block login.
+  if(!email.endsWith('@gmail.com')){
+    state.loginError = '請使用 Gmail 帳號（@gmail.com）登入。';
+    await sb.auth.signOut();
+    state.user = null;
+    render();
+    return;
   }
 
   state.user = {name, email};
@@ -608,7 +602,7 @@ function renderLogin(){
         以 Google 帳號登入
       </button>
       <div class="err">${state.loginError}</div>
-      <p class="footnote">僅限教會會員名單內的 Google 帳號可登入。若顯示無法登入，請聯絡教會管理員確認您的信箱已加入會員名單。</p>`;
+      <p class="footnote">僅限使用 Gmail 帳號（@gmail.com）登入。</p>`;
 
   const demoLoginHtml = `
       <form id="login-form" novalidate>
