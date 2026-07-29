@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
     --ink-navy:#1F2B45;
@@ -306,44 +305,62 @@ if(SUPABASE_CONFIGURED && window.supabase){
 }
 
 /* ==========================================================================
-   EMAILJS 設定（送出預約後通知指定信箱用，選填）
-   EMAILJS SETTINGS (optional — sends a notification email when a booking is made)
+   GOOGLE APPS SCRIPT 寄信設定（送出預約後通知指定信箱用，選填）
+   GOOGLE APPS SCRIPT EMAIL WEBHOOK (optional — sends a notification email)
    還沒設定時，系統只會顯示成功訊息，不會寄信，其餘功能不受影響。
    When left unconfigured, bookings still work fine — emails are simply skipped.
    設定步驟請參考教學文件。/ See the setup guide for step-by-step instructions.
    ========================================================================== */
-const EMAILJS_SERVICE_ID = 'YOUR_EMAILJS_SERVICE_ID';
-const EMAILJS_TEMPLATE_ID = 'YOUR_EMAILJS_TEMPLATE_ID';
-const EMAILJS_PUBLIC_KEY = 'YOUR_EMAILJS_PUBLIC_KEY';
-const NOTIFY_EMAIL = 'YOUR_NOTIFY_EMAIL@example.com';
+const GAS_EMAIL_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwZhtvGkUVW0MTC7TjF_xfsJvHuBOSL27NY0dl0kziygiiMNEBuAJfyEjXfmSWYPiNYfA/exec';
+const NOTIFY_EMAIL = 'admin-assistant@wcec.church';
 
-const EMAILJS_CONFIGURED =
-  !EMAILJS_SERVICE_ID.includes('YOUR_') && EMAILJS_SERVICE_ID.trim().length > 3 &&
-  !EMAILJS_TEMPLATE_ID.includes('YOUR_') && EMAILJS_TEMPLATE_ID.trim().length > 3 &&
-  !EMAILJS_PUBLIC_KEY.includes('YOUR_') && EMAILJS_PUBLIC_KEY.trim().length > 3 &&
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(NOTIFY_EMAIL.trim());
+const GAS_CONFIGURED =
+  GAS_EMAIL_WEBHOOK_URL.startsWith('https://script.google.com/macros/') &&
+  !GAS_EMAIL_WEBHOOK_URL.includes('YOUR_');
 
-if(EMAILJS_CONFIGURED && window.emailjs){
-  window.emailjs.init(EMAILJS_PUBLIC_KEY);
+/* Sends a notification via the Google Apps Script webhook. */
+async function deliverNotification(params){
+  if(!GAS_CONFIGURED) return;
+  try{
+    await fetch(GAS_EMAIL_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: JSON.stringify(params)
+    });
+  }catch(e){
+    // Don't block the UI just because the email failed to send.
+  }
 }
 
 async function sendBookingNotification(record){
-  if(!EMAILJS_CONFIGURED || !window.emailjs) return;
-  try{
-    await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: NOTIFY_EMAIL,
-      room: record.room,
-      date: record.date,
-      start_time: record.start,
-      end_time: record.end,
-      purpose: record.purpose,
-      booker_name: record.name,
-      user_email: record.email,
-      status: record.status === 'pending' ? '待審核 Pending Approval' : '已確認 Confirmed'
-    });
-  }catch(e){
-    // Don't block the booking success message just because the email failed to send.
-  }
+  if(!GAS_CONFIGURED) return;
+  await deliverNotification({
+    to_email: NOTIFY_EMAIL,
+    room: record.room,
+    date: record.date,
+    start_time: record.start,
+    end_time: record.end,
+    purpose: record.purpose,
+    booker_name: record.name,
+    user_email: record.email,
+    status: record.status === 'pending' ? '待審核 Pending Approval' : '已確認 Confirmed'
+  });
+}
+
+/* Emails the booker (not the admin) when their request is approved or rejected. */
+async function sendStatusNotification(booking, outcome){
+  if(!GAS_CONFIGURED) return;
+  await deliverNotification({
+    to_email: booking.email,
+    room: booking.room,
+    date: booking.date,
+    start_time: booking.start,
+    end_time: booking.end,
+    purpose: booking.purpose,
+    booker_name: booking.name,
+    user_email: booking.email,
+    status: outcome === 'approved' ? '您的預約已核准 Your booking was approved' : '您的預約未被核准 Your booking was not approved'
+  });
 }
 
 let state = {
@@ -782,9 +799,11 @@ async function handleCancel(id, ownerEmail){
 
 async function handleApprove(id){
   if(!state.isAdmin) return;
+  const booking = state.bookings.find(b => b.id === id);
   try{
     await bookingsAPI.update(id, {status: 'approved'});
     await loadBookings();
+    if(booking) sendStatusNotification(booking, 'approved');
   }catch(e){
     alert('核准失敗，請確認資料庫已經設定好 status 欄位（見教學文件），或稍後再試一次。\nApprove failed — please check the database has the status column set up, or try again.');
   }
@@ -793,10 +812,12 @@ async function handleApprove(id){
 async function handleReject(id){
   if(!state.isAdmin) return;
   if(!confirm('確定要拒絕這筆預約嗎？此動作會直接刪除這筆申請，無法復原。 Reject this booking request? This will delete it permanently.')) return;
+  const booking = state.bookings.find(b => b.id === id);
   try{
     await bookingsAPI.remove(id);
     if(state.selectedEventId === id) state.selectedEventId = null;
     await loadBookings();
+    if(booking) sendStatusNotification(booking, 'rejected');
   }catch(e){
     alert('拒絕失敗，請稍後再試一次。\nReject failed, please try again.');
   }
