@@ -230,6 +230,10 @@
     display:inline-block;font-size:11.5px;color:var(--slate-blue);border:1px solid var(--line);border-radius:10px;
     padding:2px 8px;margin-left:6px;vertical-align:middle;
   }
+  .pending-badge{
+    display:inline-block;font-size:11.5px;color:#8a4126;background:#FBF0E4;border:1px solid var(--ember);border-radius:10px;
+    padding:2px 8px;margin-left:6px;vertical-align:middle;font-weight:600;
+  }
 </style>
 </head>
 <body>
@@ -334,7 +338,8 @@ async function sendBookingNotification(record){
       end_time: record.end,
       purpose: record.purpose,
       booker_name: record.name,
-      user_email: record.email
+      user_email: record.email,
+      status: record.status === 'pending' ? '待審核 Pending Approval' : '已確認 Confirmed'
     });
   }catch(e){
     // Don't block the booking success message just because the email failed to send.
@@ -359,7 +364,8 @@ let state = {
   editingBookingId: null,
   editMsg: {text:'', type:''},
   showRecurringForm: false,
-  recurringMsg: {text:'', type:''}
+  recurringMsg: {text:'', type:''},
+  showPendingOnly: false
 };
 
 /* Demo/testing admin accounts used only when Supabase isn't configured yet. */
@@ -536,7 +542,8 @@ const bookingsAPI = {
       if(error) throw error;
       return data.map(r => ({
         id: r.id, room: r.room, date: r.date, start: r.start_time, end: r.end_time,
-        purpose: r.purpose, name: r.user_name, email: r.user_email, recurringId: r.recurring_id || null
+        purpose: r.purpose, name: r.user_name, email: r.user_email, recurringId: r.recurring_id || null,
+        status: r.status || 'approved'
       }));
     }
     const list = await storageAdapter.list('booking:', true);
@@ -556,7 +563,7 @@ const bookingsAPI = {
       const { error } = await sb.from('bookings').insert([{
         room: record.room, date: record.date, start_time: record.start, end_time: record.end,
         purpose: record.purpose, user_name: record.name, user_email: record.email,
-        recurring_id: record.recurringId || null
+        recurring_id: record.recurringId || null, status: record.status || 'pending'
       }]);
       if(error) throw error;
       return true;
@@ -571,7 +578,7 @@ const bookingsAPI = {
       const rows = records.map(r => ({
         room: r.room, date: r.date, start_time: r.start, end_time: r.end,
         purpose: r.purpose, user_name: r.name, user_email: r.email,
-        recurring_id: r.recurringId || null
+        recurring_id: r.recurringId || null, status: r.status || 'pending'
       }));
       const { error } = await sb.from('bookings').insert(rows);
       if(error) throw error;
@@ -620,6 +627,7 @@ const bookingsAPI = {
       if(changes.end !== undefined) payload.end_time = changes.end;
       if(changes.purpose !== undefined) payload.purpose = changes.purpose;
       if(changes.name !== undefined) payload.user_name = changes.name;
+      if(changes.status !== undefined) payload.status = changes.status;
       const { error } = await sb.from('bookings').update(payload).eq('id', id);
       if(error) throw error;
       return true;
@@ -740,14 +748,17 @@ async function handleSubmit(e){
     render(); return;
   }
 
+  const status = state.isAdmin ? 'approved' : 'pending';
   const record = {
     room, date, start, end, purpose,
-    name: bookerName, email: state.user.email
+    name: bookerName, email: state.user.email, status
   };
 
   try{
     await bookingsAPI.create(record);
-    state.formMsg = {text:'預約成功！Booking confirmed!', type:'ok'};
+    state.formMsg = state.isAdmin
+      ? {text:'預約成功！Booking confirmed!', type:'ok'}
+      : {text:'預約已送出，待管理員審核後才算正式確認。 Booking submitted — pending admin approval.', type:'ok'};
     await loadBookings();
     form.elements.namedItem('purpose').value = '';
     sendBookingNotification(record);
@@ -760,6 +771,24 @@ async function handleSubmit(e){
 async function handleCancel(id, ownerEmail){
   if(ownerEmail !== state.user.email && !state.isAdmin){ return; }
   if(!confirm('確定要取消這筆預約嗎？ Are you sure you want to cancel this booking?')) return;
+  try{
+    await bookingsAPI.remove(id);
+    if(state.selectedEventId === id) state.selectedEventId = null;
+    await loadBookings();
+  }catch(e){}
+}
+
+async function handleApprove(id){
+  if(!state.isAdmin) return;
+  try{
+    await bookingsAPI.update(id, {status: 'approved'});
+    await loadBookings();
+  }catch(e){}
+}
+
+async function handleReject(id){
+  if(!state.isAdmin) return;
+  if(!confirm('確定要拒絕這筆預約嗎？此動作會直接刪除這筆申請，無法復原。 Reject this booking request? This will delete it permanently.')) return;
   try{
     await bookingsAPI.remove(id);
     if(state.selectedEventId === id) state.selectedEventId = null;
@@ -893,7 +922,7 @@ async function handleRecurringSubmit(e){
     if(conflict){
       skipped.push(date);
     } else {
-      toCreate.push({room, date, start, end, purpose, name: bookerName, email: state.user.email, recurringId});
+      toCreate.push({room, date, start, end, purpose, name: bookerName, email: state.user.email, recurringId, status: 'approved'});
     }
   }
 
@@ -1164,10 +1193,12 @@ function renderCalendarPanel(){
       const widthPct = 100/maxLanes;
       const leftPct = ev.lane * widthPct;
       const bg = state.calRoomFilter==='all' ? colorForRoom(ev.room) : 'var(--ink-navy)';
-      const label = state.calRoomFilter==='all' ? ev.room : ev.name;
-      const titleAttr = `${ev.room} · ${ev.start}-${ev.end} · ${ev.name} · ${ev.purpose}`.replace(/"/g,'&quot;');
+      const isPending = ev.status === 'pending';
+      const label = (isPending ? '⏳ ' : '') + (state.calRoomFilter==='all' ? ev.room : ev.name);
+      const pendingStyle = isPending ? 'opacity:0.6;border-style:dashed;border-width:2px;' : '';
+      const titleAttr = `${ev.room} · ${ev.start}-${ev.end} · ${ev.name} · ${ev.purpose}${isPending ? ' · 待審核 Pending' : ''}`.replace(/"/g,'&quot;');
       return `<div class="cal-event" data-event-id="${ev.id}" title="${titleAttr}"
-        style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${bg};">
+        style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${bg};${pendingStyle}">
         <b>${label}</b>${ev.start}-${ev.end}
       </div>`;
     }).join('');
@@ -1190,17 +1221,24 @@ function renderCalendarPanel(){
 
   const selected = state.selectedEventId ? state.bookings.find(b => b.id === state.selectedEventId) : null;
   const canManageSelected = selected && (selected.email === state.user.email || state.isAdmin);
+  const selectedIsPending = selected && selected.status === 'pending';
   const detail = selected ? `<div class="cal-detail">
     <button class="close-x" id="cal-detail-close">✕ 關閉 Close</button>
     ${state.editingBookingId === selected.id ? renderEditForm(selected) : `
-    <div style="font-weight:700;font-family:'Noto Serif TC',serif;font-size:16.5px;">${selected.room}${selected.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}</div>
+    <div style="font-weight:700;font-family:'Noto Serif TC',serif;font-size:16.5px;">${selected.room}${selected.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}${selectedIsPending ? '<span class="pending-badge">⏳ 待審核 Pending</span>' : ''}</div>
     <div style="font-size:14px;color:var(--slate-blue);margin-top:5px;">${selected.date}　${selected.start} - ${selected.end}</div>
     <div style="font-size:14.5px;margin-top:8px;">預約人 Booked by：${selected.name}</div>
     <div style="font-size:14.5px;margin-top:5px;line-height:1.5;">${selected.purpose}</div>
     ${canManageSelected ? `<div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;">
-      <button class="b-cancel" data-cancel="${selected.id}">取消預約 Cancel</button>
-      <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${selected.id}">編輯 Edit</button>
-      ${selected.recurringId ? `<button class="b-cancel" data-cancel-series="${selected.recurringId}">取消整個系列 Cancel series</button>` : ''}
+      ${selectedIsPending && state.isAdmin ? `
+        <button class="b-cancel" style="color:var(--forest);" data-approve="${selected.id}">核准 Approve</button>
+        <button class="b-cancel" data-reject="${selected.id}">拒絕 Reject</button>
+        <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${selected.id}">編輯 Edit</button>
+      ` : `
+        <button class="b-cancel" data-cancel="${selected.id}">取消預約 Cancel</button>
+        <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${selected.id}">編輯 Edit</button>
+        ${selected.recurringId ? `<button class="b-cancel" data-cancel-series="${selected.recurringId}">取消整個系列 Cancel series</button>` : ''}
+      `}
     </div>` : ''}
     `}
   </div>` : '';
@@ -1247,7 +1285,11 @@ function renderApp(){
   `).join('');
 
   const today = new Date().toISOString().slice(0,10);
-  const visible = state.bookings.filter(b => (state.filterRoom==='all' || b.room===state.filterRoom) && b.date >= today);
+  const visible = state.bookings.filter(b =>
+    (state.filterRoom==='all' || b.room===state.filterRoom) &&
+    b.date >= today &&
+    (!state.showPendingOnly || b.status === 'pending')
+  );
 
   let bookingListHtml;
   if(state.loading){
@@ -1261,20 +1303,25 @@ function renderApp(){
       }
       const md = fmtMonthDay(b.date);
       const canManage = b.email === state.user.email || state.isAdmin;
+      const isPending = b.status === 'pending';
+      const statusBadge = isPending ? '<span class="pending-badge">⏳ 待審核 Pending</span>' : '';
+      const actionButtons = isPending && state.isAdmin
+        ? `<button class="b-cancel" style="color:var(--forest);" data-approve="${b.id}">核准 Approve</button>
+           <button class="b-cancel" data-reject="${b.id}">拒絕 Reject</button>
+           <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>`
+        : `<button class="b-cancel" data-cancel="${b.id}">取消預約 Cancel</button>
+           <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>
+           ${b.recurringId ? `<button class="b-cancel" data-cancel-series="${b.recurringId}">取消整個系列 Cancel series</button>` : ''}`;
       return `<div class="booking-item">
         <div class="b-date"><div class="d">${md.d}</div><div class="m">${md.m}</div></div>
         <div class="b-body">
           <div class="b-top">
-            <span class="b-room">${b.room}${b.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}</span>
+            <span class="b-room">${b.room}${b.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}${statusBadge}</span>
             <span class="b-time">${b.start} - ${b.end}</span>
           </div>
           <div class="b-who">預約人 Booked by：${b.name}</div>
           <div class="b-purpose">${b.purpose}</div>
-          ${canManage ? `<div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
-            <button class="b-cancel" data-cancel="${b.id}">取消預約 Cancel</button>
-            <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>
-            ${b.recurringId ? `<button class="b-cancel" data-cancel-series="${b.recurringId}">取消整個系列 Cancel series</button>` : ''}
-          </div>` : ''}
+          ${canManage ? `<div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">${actionButtons}</div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -1361,6 +1408,7 @@ function renderApp(){
     <div class="panel">
       <h2>即將到來的預約 Upcoming Bookings</h2>
       <p class="desc">所有會員皆可查看，避免時段衝突。<br>Visible to all members to help avoid double-booking.</p>
+      ${state.isAdmin ? `<button class="recurring-toggle-btn" id="pending-only-toggle" style="${state.showPendingOnly ? '' : 'background:#fff;border-color:var(--line);'}">${state.showPendingOnly ? '✓ 只顯示待審核 Showing pending only' : '⏳ 只顯示待審核 Show pending only'}</button>` : ''}
       <div class="filter-bar">${filterChips}</div>
       ${bookingListHtml}
     </div>
@@ -1447,6 +1495,14 @@ function renderApp(){
 
     const cancelRecurringBtn = document.getElementById('cancel-recurring-btn');
     if(cancelRecurringBtn) cancelRecurringBtn.addEventListener('click', closeRecurringForm);
+
+    const pendingOnlyToggle = document.getElementById('pending-only-toggle');
+    if(pendingOnlyToggle){
+      pendingOnlyToggle.addEventListener('click', () => {
+        state.showPendingOnly = !state.showPendingOnly;
+        render();
+      });
+    }
   }
 
   wrap.querySelectorAll('[data-cancel]').forEach(btn => {
@@ -1471,6 +1527,18 @@ function renderApp(){
   wrap.querySelectorAll('[data-cancel-series]').forEach(btn => {
     btn.addEventListener('click', () => {
       handleCancelSeries(btn.dataset.cancelSeries);
+    });
+  });
+
+  wrap.querySelectorAll('[data-approve]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      handleApprove(btn.dataset.approve);
+    });
+  });
+
+  wrap.querySelectorAll('[data-reject]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      handleReject(btn.dataset.reject);
     });
   });
 
