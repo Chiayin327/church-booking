@@ -382,7 +382,8 @@ let state = {
   editMsg: {text:'', type:''},
   showRecurringForm: false,
   recurringMsg: {text:'', type:''},
-  showPendingOnly: false
+  showPendingOnly: false,
+  expandedSeries: {}
 };
 
 /* Demo/testing admin accounts used only when Supabase isn't configured yet. */
@@ -1323,37 +1324,90 @@ function renderApp(){
     (!state.showPendingOnly || b.status === 'pending')
   );
 
+  function renderBookingRow(b, opts){
+    opts = opts || {};
+    if(state.editingBookingId === b.id){
+      return `<div class="booking-item">${renderEditForm(b)}</div>`;
+    }
+    const md = fmtMonthDay(b.date);
+    const canManage = b.email === state.user.email || state.isAdmin;
+    const isPending = b.status === 'pending';
+    const statusBadge = isPending ? '<span class="pending-badge">⏳ 待審核 Pending</span>' : '';
+    const showSeriesCancelBtn = b.recurringId && !opts.hideSeriesCancel;
+    const actionButtons = isPending && state.isAdmin
+      ? `<button class="b-cancel" style="color:var(--forest);" data-approve="${b.id}">核准 Approve</button>
+         <button class="b-cancel" data-reject="${b.id}">拒絕 Reject</button>
+         <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>`
+      : `<button class="b-cancel" data-cancel="${b.id}">取消預約 Cancel</button>
+         <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>
+         ${showSeriesCancelBtn ? `<button class="b-cancel" data-cancel-series="${b.recurringId}">取消整個系列 Cancel series</button>` : ''}`;
+    return `<div class="booking-item">
+      <div class="b-date"><div class="d">${md.d}</div><div class="m">${md.m}</div></div>
+      <div class="b-body">
+        <div class="b-top">
+          <span class="b-room">${b.room}${b.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}${statusBadge}</span>
+          <span class="b-time">${b.start} - ${b.end}</span>
+        </div>
+        <div class="b-who">預約人 Booked by：${b.name}</div>
+        <div class="b-purpose">${b.purpose}</div>
+        ${canManage ? `<div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">${actionButtons}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  /* Group visible bookings so a recurring series appears as one collapsible
+     row instead of cluttering the list with every future occurrence. */
+  function buildDisplayUnits(list){
+    const seriesMap = new Map();
+    const singles = [];
+    for(const b of list){
+      if(b.recurringId){
+        if(!seriesMap.has(b.recurringId)) seriesMap.set(b.recurringId, []);
+        seriesMap.get(b.recurringId).push(b);
+      } else {
+        singles.push({type:'single', sortDate: b.date, booking: b});
+      }
+    }
+    const seriesUnits = [...seriesMap.entries()].map(([recurringId, items]) => {
+      items.sort((a,b) => (a.date+a.start).localeCompare(b.date+b.start));
+      return {type:'series', sortDate: items[0].date, recurringId, items};
+    });
+    return [...singles, ...seriesUnits].sort((a,b) => a.sortDate.localeCompare(b.sortDate));
+  }
+
   let bookingListHtml;
   if(state.loading){
     bookingListHtml = `<div class="loading">載入預約紀錄中… Loading bookings…</div>`;
   } else if(visible.length === 0){
     bookingListHtml = `<div class="empty">目前沒有即將到來的預約。 No upcoming bookings.</div>`;
   } else {
-    bookingListHtml = visible.map(b => {
-      if(state.editingBookingId === b.id){
-        return `<div class="booking-item">${renderEditForm(b)}</div>`;
+    const units = buildDisplayUnits(visible);
+    bookingListHtml = units.map(unit => {
+      if(unit.type === 'single'){
+        return renderBookingRow(unit.booking);
       }
-      const md = fmtMonthDay(b.date);
-      const canManage = b.email === state.user.email || state.isAdmin;
-      const isPending = b.status === 'pending';
-      const statusBadge = isPending ? '<span class="pending-badge">⏳ 待審核 Pending</span>' : '';
-      const actionButtons = isPending && state.isAdmin
-        ? `<button class="b-cancel" style="color:var(--forest);" data-approve="${b.id}">核准 Approve</button>
-           <button class="b-cancel" data-reject="${b.id}">拒絕 Reject</button>
-           <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>`
-        : `<button class="b-cancel" data-cancel="${b.id}">取消預約 Cancel</button>
-           <button class="b-cancel" style="color:var(--slate-blue);" data-edit="${b.id}">編輯 Edit</button>
-           ${b.recurringId ? `<button class="b-cancel" data-cancel-series="${b.recurringId}">取消整個系列 Cancel series</button>` : ''}`;
+      // Recurring series
+      const isExpanded = !!state.expandedSeries[unit.recurringId];
+      if(isExpanded){
+        const rows = unit.items.map(b => renderBookingRow(b, {hideSeriesCancel: false})).join('');
+        return rows + `<div style="padding:8px 4px 4px;"><button class="b-cancel" style="color:var(--slate-blue);" data-collapse-series="${unit.recurringId}">收合 Collapse ▲</button></div>`;
+      }
+      const first = unit.items[0];
+      const md = fmtMonthDay(first.date);
+      const canManage = first.email === state.user.email || state.isAdmin;
       return `<div class="booking-item">
         <div class="b-date"><div class="d">${md.d}</div><div class="m">${md.m}</div></div>
         <div class="b-body">
           <div class="b-top">
-            <span class="b-room">${b.room}${b.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}${statusBadge}</span>
-            <span class="b-time">${b.start} - ${b.end}</span>
+            <span class="b-room">${first.room}<span class="recurring-badge">🔁 重複 Recurring · 共 ${unit.items.length} 筆 · ${unit.items.length} occurrences</span></span>
+            <span class="b-time">${first.start} - ${first.end}</span>
           </div>
-          <div class="b-who">預約人 Booked by：${b.name}</div>
-          <div class="b-purpose">${b.purpose}</div>
-          ${canManage ? `<div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">${actionButtons}</div>` : ''}
+          <div class="b-who">預約人 Booked by：${first.name}</div>
+          <div class="b-purpose">${first.purpose}</div>
+          <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
+            <button class="b-cancel" style="color:var(--slate-blue);" data-expand-series="${unit.recurringId}">顯示全部 ${unit.items.length} 筆 Show all ▼</button>
+            ${canManage ? `<button class="b-cancel" data-cancel-series="${unit.recurringId}">取消整個系列 Cancel series</button>` : ''}
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -1559,6 +1613,20 @@ function renderApp(){
   wrap.querySelectorAll('[data-cancel-series]').forEach(btn => {
     btn.addEventListener('click', () => {
       handleCancelSeries(btn.dataset.cancelSeries);
+    });
+  });
+
+  wrap.querySelectorAll('[data-expand-series]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.expandedSeries[btn.dataset.expandSeries] = true;
+      render();
+    });
+  });
+
+  wrap.querySelectorAll('[data-collapse-series]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.expandedSeries[btn.dataset.collapseSeries] = false;
+      render();
     });
   });
 
