@@ -775,7 +775,9 @@ async function handleCancel(id, ownerEmail){
     await bookingsAPI.remove(id);
     if(state.selectedEventId === id) state.selectedEventId = null;
     await loadBookings();
-  }catch(e){}
+  }catch(e){
+    alert('取消失敗，請稍後再試一次。\nCancel failed, please try again.');
+  }
 }
 
 async function handleApprove(id){
@@ -783,7 +785,9 @@ async function handleApprove(id){
   try{
     await bookingsAPI.update(id, {status: 'approved'});
     await loadBookings();
-  }catch(e){}
+  }catch(e){
+    alert('核准失敗，請確認資料庫已經設定好 status 欄位（見教學文件），或稍後再試一次。\nApprove failed — please check the database has the status column set up, or try again.');
+  }
 }
 
 async function handleReject(id){
@@ -793,7 +797,9 @@ async function handleReject(id){
     await bookingsAPI.remove(id);
     if(state.selectedEventId === id) state.selectedEventId = null;
     await loadBookings();
-  }catch(e){}
+  }catch(e){
+    alert('拒絕失敗，請稍後再試一次。\nReject failed, please try again.');
+  }
 }
 
 function openEditBooking(id){
@@ -955,7 +961,9 @@ async function handleCancelSeries(recurringId){
       if(!stillExists || stillExists.recurringId === recurringId) state.selectedEventId = null;
     }
     await loadBookings();
-  }catch(e){}
+  }catch(e){
+    alert('取消整個系列失敗，請稍後再試一次。\nCancelling the series failed, please try again.');
+  }
 }
 
 function renderRecurringForm(){
