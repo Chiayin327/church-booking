@@ -145,6 +145,20 @@ function halfHourOptions(){
   return opts;
 }
 function pad2(n){ return String(n).padStart(2,'0'); }
+function to12h(hhmm){
+  if(!hhmm) return hhmm;
+  const [h,m] = hhmm.split(':').map(Number);
+  const period = h < 12 ? 'AM' : 'PM';
+  let h12 = h % 12;
+  if(h12 === 0) h12 = 12;
+  return h12 + ':' + String(m).padStart(2,'0') + ' ' + period;
+}
+function hourLabel12(h){
+  const period = h < 12 ? 'AM' : 'PM';
+  let h12 = h % 12;
+  if(h12 === 0) h12 = 12;
+  return h12 + ' ' + period;
+}
 function formatISODate(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
 function parseISODate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function mondayOf(d){
@@ -220,7 +234,7 @@ function renderBookingRow(b){
     <div class="b-body">
       <div class="b-top">
         <span class="b-room">${b.room}${b.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}</span>
-        <span class="b-time">${b.start} - ${b.end}</span>
+        <span class="b-time">${to12h(b.start)} - ${to12h(b.end)}</span>
       </div>
       <div class="b-who">預約人 Booked by：${b.name}</div>
       <div class="b-purpose">${b.purpose}</div>
@@ -277,7 +291,7 @@ function renderListPanel(){
         <div class="b-body">
           <div class="b-top">
             <span class="b-room">${first.room}<span class="recurring-badge">🔁 重複 Recurring · 共 ${unit.items.length} 筆</span></span>
-            <span class="b-time">${first.start} - ${first.end}</span>
+            <span class="b-time">${to12h(first.start)} - ${to12h(first.end)}</span>
           </div>
           <div class="b-who">預約人 Booked by：${first.name}</div>
           <div class="b-purpose">${first.purpose}</div>
@@ -318,7 +332,7 @@ function renderCalendarPanel(){
   const timeLabels = [];
   for(let i=0; i<48; i++){
     if(i % 2 !== 0) continue;
-    timeLabels.push(`<div class="cal-time-label" style="top:${i*SLOT_H}px">${String(Math.floor(i/2)).padStart(2,'0')}:00</div>`);
+    timeLabels.push(`<div class="cal-time-label" style="top:${i*SLOT_H}px">${hourLabel12(Math.floor(i/2))}</div>`);
   }
 
   const dayColumns = days.map(dateISO => {
@@ -333,10 +347,10 @@ function renderCalendarPanel(){
       const leftPct = ev.lane * widthPct;
       const bg = state.calRoomFilter==='all' ? colorForRoom(ev.room) : 'var(--ink-navy)';
       const label = state.calRoomFilter==='all' ? ev.room : ev.name;
-      const titleAttr = `${ev.room} · ${ev.start}-${ev.end} · ${ev.name} · ${ev.purpose}`.replace(/"/g,'&quot;');
+      const titleAttr = `${ev.room} · ${to12h(ev.start)}-${to12h(ev.end)} · ${ev.name} · ${ev.purpose}`.replace(/"/g,'&quot;');
       return `<div class="cal-event" data-event-id="${ev.id}" title="${titleAttr}"
         style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);background:${bg};">
-        <b>${label}</b>${ev.start}-${ev.end}
+        <b>${label}</b>${to12h(ev.start)}-${to12h(ev.end)}
       </div>`;
     }).join('');
     const isToday = dateISO === todayISO;
@@ -357,7 +371,7 @@ function renderCalendarPanel(){
   const detail = selected ? `<div class="cal-detail">
     <button class="close-x" id="cal-detail-close">✕ 關閉 Close</button>
     <div style="font-weight:700;font-family:'Noto Serif TC',serif;font-size:16.5px;">${selected.room}${selected.recurringId ? '<span class="recurring-badge">🔁 重複 Recurring</span>' : ''}</div>
-    <div style="font-size:14px;color:var(--slate-blue);margin-top:5px;">${selected.date}　${selected.start} - ${selected.end}</div>
+    <div style="font-size:14px;color:var(--slate-blue);margin-top:5px;">${selected.date}　${to12h(selected.start)} - ${to12h(selected.end)}</div>
     <div style="font-size:14.5px;margin-top:8px;">預約人 Booked by：${selected.name}</div>
     <div style="font-size:14.5px;margin-top:5px;line-height:1.5;">${selected.purpose}</div>
   </div>` : '';
