@@ -391,16 +391,16 @@ const DEMO_ADMIN_EMAILS = ['test.member@gmail.com', 'admin@gmail.com'];
 /* Email domains allowed to log in. Add more domains here if needed. */
 const ALLOWED_EMAIL_DOMAINS = ['@gmail.com', '@wcec.church'];
 
-function halfHourOptions(){
+function quarterHourOptions(){
   const opts = [];
   for(let h=0; h<24; h++){
-    for(const m of [0,30]){
+    for(const m of [0,15,30,45]){
       opts.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
     }
   }
   return opts;
 }
-const TIME_OPTIONS = halfHourOptions();
+const TIME_OPTIONS = quarterHourOptions();
 
 const ROOM_COLORS = ['#1F2B45','#4A5A78','#C9A227','#B85C38','#2F4A3C','#7A6248','#6B4E71','#3E6E75','#8C5B3F','#5C6B3F','#4B3F72','#8A3B4B','#2E5C6E','#7A3E2E','#456B4A','#5A4A6B'];
 function colorForRoom(room){
@@ -1201,13 +1201,16 @@ function renderCalendarPanel(){
     `<option value="${r}" ${state.calRoomFilter===r?'selected':''}>${r==='all'?'全部空間 All Rooms':r}</option>`
   ).join('');
 
-  const SLOT_H = 22; // px per 30 min
+  const SLOT_H = 22; // px per 30 min (calendar grid row height — independent of booking time-picker granularity)
   const gridHeight = 48 * SLOT_H;
 
-  const timeLabels = TIME_OPTIONS.map((t,i) => {
-    if(i % 2 !== 0) return '';
-    return `<div class="cal-time-label" style="top:${i*SLOT_H}px">${t}</div>`;
-  }).join('');
+  const timeLabels = [];
+  for(let i=0; i<48; i++){
+    if(i % 2 !== 0) continue;
+    const hh = String(Math.floor(i/2)).padStart(2,'0');
+    timeLabels.push(`<div class="cal-time-label" style="top:${i*SLOT_H}px">${hh}:00</div>`);
+  }
+  const timeLabelsHtml = timeLabels.join('');
 
   const dayColumns = days.map(dateISO => {
     const dayEvents = state.bookings.filter(b =>
@@ -1291,7 +1294,7 @@ function renderCalendarPanel(){
         <div class="cal-grid">
           <div class="cal-corner"></div>
           ${headCells}
-          <div class="cal-time-col" style="height:${gridHeight}px">${timeLabels}</div>
+          <div class="cal-time-col" style="height:${gridHeight}px">${timeLabelsHtml}</div>
           ${dayColumns}
         </div>
       </div>
