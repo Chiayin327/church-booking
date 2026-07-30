@@ -1,0 +1,16 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    - cron: '0 8 * * 1,4'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -s -o /dev/null -w "Status: %{http_code}\n" \
+            "https://xrdclxtmuirgvymoswxe.supabase.co/rest/v1/public_bookings?select=id&limit=1" \
+            -H "apikey: sb_publishable_E-_dKGSwuWi246UdkVXA5Q_8Kr17waJ"
